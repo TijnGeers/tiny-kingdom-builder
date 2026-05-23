@@ -1,0 +1,10 @@
+{
+  "name": "Tiny Kingdom Builder",
+  "short_name": "TinyKingdom",
+  "description": "Bouw je eigen zwevend koninkrijk!",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#16213e",
+  "orientation": "any"
+}
