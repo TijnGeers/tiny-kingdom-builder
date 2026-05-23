@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiny Kingdom Builder</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Title Screen -->
+        <div id="title-screen">
+            <div class="title-content">
+                <h1>🏰 Tiny Kingdom Builder</h1>
+                <p class="subtitle">Bouw je koninkrijk op zwevende eilandjes</p>
+                <div class="title-features">
+                    <span>🏗️ Slim bouwen</span>
+                    <span>🌬️ Wind gevaar</span>
+                    <span>🐉 Draakjes</span>
+                </div>
+                <button id="start-btn" class="btn-primary">Start Spel</button>
+            </div>
+        </div>
+
+        <!-- Menu Panel (global, works from title + game) -->
+        <div id="menu-panel" class="hidden">
+            <div class="menu-panel-content">
+                <h2>💾 Save Slots</h2>
+                <div id="save-slots"></div>
+                <button class="btn-primary menu-close-btn" onclick="closeMenuPanel()">Sluiten</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="hidden">
+            <!-- Menu Button -->
+            <button id="menu-btn" class="menu-btn">☰</button>
+
+            <!-- Top Bar - Resources -->
+            <div id="top-bar">
+                <div class="resource" id="res-gold">
+                    <span class="res-icon">💰</span>
+                    <span class="res-value" id="gold-value">100</span>
+                    <span class="res-label">Goud</span>
+                </div>
+                <div class="resource" id="res-wood">
+                    <span class="res-icon">🪵</span>
+                    <span class="res-value" id="wood-value">50</span>
+                    <span class="res-label">Hout</span>
+                </div>
+                <div class="resource" id="res-stone">
+                    <span class="res-icon">🪨</span>
+                    <span class="res-value" id="stone-value">30</span>
+                    <span class="res-label">Steen</span>
+                </div>
+                <div class="resource" id="res-food">
+                    <span class="res-icon">🌾</span>
+                    <span class="res-value" id="food-value">40</span>
+                    <span class="res-label">Voedsel</span>
+                </div>
+                <div class="resource" id="res-scales">
+                    <span class="res-icon">🐲</span>
+                    <span class="res-value" id="scales-value">0</span>
+                    <span class="res-label">Schubben</span>
+                </div>
+                <div class="resource" id="res-wool">
+                    <span class="res-icon">🧶</span>
+                    <span class="res-value" id="wool-value">0</span>
+                    <span class="res-label">Wol</span>
+                </div>
+                <div class="resource" id="res-leather">
+                    <span class="res-icon">👜</span>
+                    <span class="res-value" id="leather-value">0</span>
+                    <span class="res-label">Leer</span>
+                </div>
+                <div class="resource" id="res-iron">
+                    <span class="res-icon">⚙️</span>
+                    <span class="res-value" id="iron-value">0</span>
+                    <span class="res-label">IJzer</span>
+                </div>
+                <div class="resource" id="res-pop">
+                    <span class="res-icon">👥</span>
+                    <span class="res-value" id="pop-value">5</span>
+                    <span class="res-label">Bevolking</span>
+                </div>
+            </div>
+
+            <!-- Bot Panel Button -->
+            <div id="bot-bar">
+                <button id="bot-btn" onclick="openBotPanel()">⚔️ Rivalen</button>
+            </div>
+
+            <!-- Main Game Area -->
+            <div id="game-area">
+                <canvas id="game-canvas"></canvas>
+                <!-- Wind indicator -->
+                <div id="wind-indicator" class="hidden">
+                    <span id="wind-icon">🌬️</span>
+                    <span id="wind-text">Storm komt!</span>
+                </div>
+                <!-- Dragon alert -->
+                <div id="dragon-alert" class="hidden">
+                    <span>🐉</span>
+                    <span id="dragon-text">Draakje gespot!</span>
+                </div>
+            </div>
+
+            <!-- Bottom Panel - Building Menu -->
+            <div id="bottom-panel">
+                <div id="building-menu">
+                    <h3>🏗️ Gebouwen</h3>
+                    <div id="building-list"></div>
+                </div>
+                <div id="info-panel">
+                    <h3>ℹ️ Info</h3>
+                    <div id="info-content">
+                        <p>Klik op een eiland om te bouwen. Gebouwen naast elkaar geven bonussen!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container"></div>
+
+        <!-- Event Modal (legacy, hidden) -->
+        <div id="event-modal" class="hidden">
+            <div class="modal-content">
+                <h2 id="event-title"></h2>
+                <p id="event-text"></p>
+                <div id="event-effects"></div>
+                <button id="event-ok" class="btn-primary">OK</button>
+            </div>
+        </div>
+
+        <!-- Bot Panel Modal -->
+        <div id="bot-modal" class="hidden">
+            <div class="modal-content bot-panel">
+                <h2>⚔️ Rivalen</h2>
+                <p class="bot-desc">Daag rivalen uit voor hun resources! Maar pas op: verlies je, dan nemen zij 25% van jouw resources.</p>
+                <div id="bot-list"></div>
+                <button class="btn-primary" onclick="closeBotPanel()" style="margin-top:10px">Sluiten</button>
+            </div>
+        </div>
+
+        <!-- Bot Invite Modal -->
+        <div id="bot-invite-modal" class="hidden">
+            <div class="modal-content bot-invite">
+                <h2 id="bot-invite-title">⚔️ Uitdaging!</h2>
+                <p id="bot-invite-text"></p>
+                <div id="bot-invite-stats"></div>
+                <div class="bot-invite-buttons">
+                    <button class="btn-primary btn-accept" id="bot-invite-accept">⚔️ Accepteren</button>
+                    <button class="btn-primary btn-decline" id="bot-invite-decline">🚫 Weigeren</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battle Result Modal -->
+        <div id="battle-modal" class="hidden">
+            <div class="modal-content battle-result">
+                <h2 id="battle-title"></h2>
+                <p id="battle-text"></p>
+                <div id="battle-stats"></div>
+                <div id="battle-effects"></div>
+                <button class="btn-primary" onclick="closeBattleModal()">OK</button>
+            </div>
+        </div>
+
+        <!-- Alchemist Lab Modal -->
+        <div id="alchemist-modal" class="hidden">
+            <div class="modal-content alchemist-shop">
+                <h2>⚗️ Alchemist Lab</h2>
+                <p class="alchemist-desc">Zet resources om naar andere resources. Kost schubben 🐲</p>
+                <div class="alchemist-form">
+                    <div class="alchemist-row">
+                        <label>Van:</label>
+                        <select id="alch-input-res"></select>
+                        <input type="number" id="alch-input-amount" min="1" value="10" style="width:70px">
+                    </div>
+                    <div class="alchemist-arrow">⬇️</div>
+                    <div class="alchemist-row">
+                        <label>Naar:</label>
+                        <select id="alch-output-res"></select>
+                    </div>
+                    <div class="alchemist-cost" id="alch-cost-display">
+                        Kosten: <span id="alch-scales-cost">0</span> 🐲 schubben
+                    </div>
+                    <div class="alchemist-time" id="alch-time-display">
+                        Tijd: <span id="alch-time">3:00</span>
+                    </div>
+                    <button id="alch-start" class="btn-primary" onclick="startAlchemistConversion()">Start Conversie</button>
+                </div>
+                <div id="alch-active-list"></div>
+                <button class="btn-primary" onclick="closeAlchemistLab()" style="margin-top:10px">Sluiten</button>
+            </div>
+        </div>
+
+        <!-- Trader Modal -->
+        <div id="trader-modal" class="hidden">
+            <div class="modal-content trader-shop">
+                <h2>🧙 Handelaar</h2>
+                <p id="trader-timer">Vertrekt over: 10:00</p>
+                <div id="trader-offers"></div>
+                <button id="trader-close" class="btn-primary" onclick="closeTraderShop()">Sluiten</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
