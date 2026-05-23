@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a3e"/>
+      <stop offset="100%" style="stop-color:#2d1b69"/>
+    </linearGradient>
+    <linearGradient id="island" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a7c59"/>
+      <stop offset="100%" style="stop-color:#2d5a3f"/>
+    </linearGradient>
+    <linearGradient id="castle" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8d5b7"/>
+      <stop offset="100%" style="stop-color:#c4a882"/>
+    </linearGradient>
+    <linearGradient id="roof" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#c0392b"/>
+      <stop offset="100%" style="stop-color:#922b21"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+
+  <!-- Stars -->
+  <circle cx="80" cy="80" r="2" fill="#fff" opacity="0.6"/>
+  <circle cx="420" cy="60" r="2.5" fill="#fff" opacity="0.5"/>
+  <circle cx="140" cy="140" r="1.5" fill="#fff" opacity="0.4"/>
+  <circle cx="380" cy="130" r="2" fill="#fff" opacity="0.5"/>
+  <circle cx="60" cy="200" r="1.5" fill="#fff" opacity="0.3"/>
+  <circle cx="450" cy="190" r="2" fill="#fff" opacity="0.4"/>
+  <circle cx="200" cy="70" r="1.5" fill="#fff" opacity="0.5"/>
+  <circle cx="320" cy="90" r="2" fill="#fff" opacity="0.3"/>
+
+  <!-- Floating Island -->
+  <g filter="url(#shadow)">
+    <ellipse cx="256" cy="340" rx="160" ry="30" fill="url(#island)"/>
+    <!-- Island bottom (rocky) -->
+    <path d="M 120 340 Q 140 400 180 420 Q 220 440 256 445 Q 292 440 332 420 Q 372 400 392 340" fill="#5a4a3a" opacity="0.8"/>
+    <path d="M 140 340 Q 160 390 200 410 Q 240 425 256 428 Q 272 425 312 410 Q 352 390 372 340" fill="#6b5a4a" opacity="0.6"/>
+  </g>
+
+  <!-- Castle Main Body -->
+  <g filter="url(#shadow)">
+    <!-- Main wall -->
+    <rect x="196" y="230" width="120" height="110" rx="4" fill="url(#castle)"/>
+
+    <!-- Left tower -->
+    <rect x="170" y="200" width="40" height="140" rx="3" fill="url(#castle)"/>
+    <!-- Left tower battlements -->
+    <rect x="170" y="190" width="12" height="15" fill="url(#castle)"/>
+    <rect x="184" y="190" width="12" height="15" fill="url(#castle)"/>
+    <rect x="198" y="190" width="12" height="15" fill="url(#castle)"/>
+    <!-- Left tower roof -->
+    <polygon points="175,190 190,160 205,190" fill="url(#roof)"/>
+
+    <!-- Right tower -->
+    <rect x="302" y="200" width="40" height="140" rx="3" fill="url(#castle)"/>
+    <!-- Right tower battlements -->
+    <rect x="302" y="190" width="12" height="15" fill="url(#castle)"/>
+    <rect x="316" y="190" width="12" height="15" fill="url(#castle)"/>
+    <rect x="330" y="190" width="12" height="15" fill="url(#castle)"/>
+    <!-- Right tower roof -->
+    <polygon points="307,190 322,160 337,190" fill="url(#roof)"/>
+
+    <!-- Center tower (taller) -->
+    <rect x="232" y="185" width="48" height="155" rx="3" fill="url(#castle)"/>
+    <!-- Center tower roof -->
+    <polygon points="230,185 256,140 282,185" fill="url(#roof)"/>
+    <!-- Flag -->
+    <line x1="256" y1="140" x2="256" y2="115" stroke="#8B7355" stroke-width="3"/>
+    <polygon points="256,115 285,125 256,135" fill="#f1c40f"/>
+
+    <!-- Gate -->
+    <path d="M 240 340 Q 240 300 256 300 Q 272 300 272 340" fill="#4a3728"/>
+
+    <!-- Windows -->
+    <rect x="205" y="255" width="14" height="20" rx="7" fill="#3a5f8a"/>
+    <rect x="293" y="255" width="14" height="20" rx="7" fill="#3a5f8a"/>
+    <rect x="248" y="210" width="16" height="22" rx="8" fill="#3a5f8a"/>
+
+    <!-- Window glow -->
+    <rect x="205" y="255" width="14" height="20" rx="7" fill="#ffd700" opacity="0.3"/>
+    <rect x="293" y="255" width="14" height="20" rx="7" fill="#ffd700" opacity="0.3"/>
+    <rect x="248" y="210" width="16" height="22" rx="8" fill="#ffd700" opacity="0.3"/>
+
+    <!-- Left tower windows -->
+    <rect x="183" y="240" width="10" height="14" rx="5" fill="#3a5f8a"/>
+    <rect x="183" y="240" width="10" height="14" rx="5" fill="#ffd700" opacity="0.3"/>
+
+    <!-- Right tower windows -->
+    <rect x="315" y="240" width="10" height="14" rx="5" fill="#3a5f8a"/>
+    <rect x="315" y="240" width="10" height="14" rx="5" fill="#ffd700" opacity="0.3"/>
+  </g>
+
+  <!-- Small clouds -->
+  <g opacity="0.15">
+    <ellipse cx="100" cy="280" rx="50" ry="15" fill="#fff"/>
+    <ellipse cx="420" cy="250" rx="40" ry="12" fill="#fff"/>
+  </g>
+
+  <!-- "TK" text at bottom -->
+  <text x="256" y="485" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#fff" opacity="0.6">TINY KINGDOM</text>
+</svg>

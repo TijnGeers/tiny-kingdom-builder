@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tiny-kingdom-v1';
+const CACHE_NAME = 'tiny-kingdom-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -6,6 +6,9 @@ const ASSETS = [
   './style.css',
   './manifest.json',
   './dragon.png.jpg',
+  './icon-192.png',
+  './icon-512.png',
+  './icon.svg',
 ];
 
 // Install: cache all game files
