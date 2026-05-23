@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tiny-kingdom-v3';
+const CACHE_NAME = 'tiny-kingdom-v4';
 const ASSETS = [
   './',
   './index.html',
