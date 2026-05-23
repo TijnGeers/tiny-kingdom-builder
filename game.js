@@ -916,6 +916,86 @@ function setupCanvasEvents() {
     });
     
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    // ---- TOUCH EVENTS (mobile) ----
+    let touchStartPos = null;
+    let touchStartTime = 0;
+    let lastTouchDist = 0;
+    let isTouchDragging = false;
+    
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            const t = e.touches[0];
+            touchStartPos = { x: t.clientX, y: t.clientY };
+            touchStartTime = Date.now();
+            isTouchDragging = false;
+            Game.dragStart = { x: t.clientX, y: t.clientY };
+        } else if (e.touches.length === 2) {
+            // Pinch start
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+            isTouchDragging = true;
+        }
+    }, { passive: false });
+    
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1 && touchStartPos) {
+            const t = e.touches[0];
+            const dx = t.clientX - Game.dragStart.x;
+            const dy = t.clientY - Game.dragStart.y;
+            const totalDx = t.clientX - touchStartPos.x;
+            const totalDy = t.clientY - touchStartPos.y;
+            const totalDist = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
+            
+            if (totalDist > 10) {
+                isTouchDragging = true;
+            }
+            
+            if (isTouchDragging) {
+                Game.camera.x += dx;
+                Game.camera.y += dy;
+                Game.dragStart = { x: t.clientX, y: t.clientY };
+            }
+        } else if (e.touches.length === 2) {
+            // Pinch zoom
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (lastTouchDist > 0) {
+                const rect = Game.canvas.getBoundingClientRect();
+                const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                const my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+                
+                const oldZoom = Game.camera.zoom;
+                const scale = dist / lastTouchDist;
+                Game.camera.zoom = Math.max(0.2, Math.min(3, Game.camera.zoom * scale));
+                
+                const zoomChange = Game.camera.zoom / oldZoom;
+                Game.camera.x = mx - (mx - Game.camera.x) * zoomChange;
+                Game.camera.y = my - (my - Game.camera.y) * zoomChange;
+            }
+            lastTouchDist = dist;
+            isTouchDragging = true;
+        }
+    }, { passive: false });
+    
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (!isTouchDragging && touchStartPos && e.changedTouches.length === 1) {
+            const t = e.changedTouches[0];
+            // Simulate click
+            handleClick({ clientX: t.clientX, clientY: t.clientY });
+        }
+        if (e.touches.length === 0) {
+            touchStartPos = null;
+            isTouchDragging = false;
+            lastTouchDist = 0;
+        }
+    }, { passive: false });
 }
 
 function handleClick(e) {
