@@ -215,7 +215,19 @@
     <script src="game.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
+            // Force update: unregister old SW, clear caches, register fresh
+            navigator.serviceWorker.getRegistrations().then(regs => {
+                regs.forEach(r => r.update());
+            });
             navigator.serviceWorker.register('./sw.js');
+            // Clear old caches on load
+            if (window.caches) {
+                caches.keys().then(keys => {
+                    keys.forEach(k => {
+                        if (k !== 'tiny-kingdom-v3') caches.delete(k);
+                    });
+                });
+            }
         }
     </script>
 </body>
