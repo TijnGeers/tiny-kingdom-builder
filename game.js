@@ -791,7 +791,7 @@ function init() {
     
     // Load island image
     Game.islandImg = new Image();
-    Game.islandImg.src = 'island.png';
+    Game.islandImg.src = 'eiland.png.jpg';
     
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
