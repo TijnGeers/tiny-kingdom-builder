@@ -25,6 +25,7 @@ const Game = {
     trader: null,
     traderTimer: 0,
     placingIsland: false,
+    islandImg: null,
 };
 
 // ============================================
@@ -788,6 +789,9 @@ function init() {
     Game.canvas = document.getElementById('game-canvas');
     Game.ctx = Game.canvas.getContext('2d');
     
+    // Load island image
+    Game.islandImg = new Image();
+    Game.islandImg.src = 'island.png';
     
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -3097,53 +3101,27 @@ function drawIsland(ctx, island) {
     const startX = pos.x - gridSize / 2;
     const startY = pos.y - gridSize / 2;
     
-    // Island shadow (below)
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-    ctx.beginPath();
-    ctx.ellipse(pos.x + 5, pos.y + totalHeight / 2 + 18, totalWidth / 2 - 5, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    
-    // Island base - nice rounded floating rock shape
-    ctx.save();
-    const grad = ctx.createRadialGradient(pos.x, pos.y - 10, 10, pos.x, pos.y + 20, totalWidth / 1.5);
-    grad.addColorStop(0, '#4a7a4a');
-    grad.addColorStop(0.6, '#2d5a2d');
-    grad.addColorStop(1, '#1a3a1a');
-    
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    // Top surface - rounded rectangle
-    const radius = 14;
-    ctx.moveTo(left + radius, top);
-    ctx.lineTo(left + totalWidth - radius, top);
-    ctx.quadraticCurveTo(left + totalWidth, top, left + totalWidth, top + radius);
-    ctx.lineTo(left + totalWidth, top + totalHeight - radius);
-    ctx.quadraticCurveTo(left + totalWidth, top + totalHeight, left + totalWidth - radius, top + totalHeight);
-    // Bottom rock shape
-    ctx.lineTo(left + totalWidth - 20, top + totalHeight + 20);
-    ctx.quadraticCurveTo(pos.x, top + totalHeight + 35, left + 20, top + totalHeight + 20);
-    ctx.lineTo(left + radius, top + totalHeight);
-    ctx.quadraticCurveTo(left, top + totalHeight, left, top + totalHeight - radius);
-    ctx.lineTo(left, top + radius);
-    ctx.quadraticCurveTo(left, top, left + radius, top);
-    ctx.closePath();
-    ctx.fill();
-    
-    // Border glow
-    ctx.strokeStyle = 'rgba(100, 220, 100, 0.25)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-    
-    // Grass top edge
-    ctx.save();
-    ctx.fillStyle = '#5a9a5a';
-    ctx.beginPath();
-    ctx.roundRect(left + 3, top + 3, totalWidth - 6, 8, [6, 6, 0, 0]);
-    ctx.fill();
-    ctx.restore();
+    // Draw island image
+    if (Game.islandImg && Game.islandImg.complete && Game.islandImg.naturalWidth > 0) {
+        const imgPadding = 20;
+        const imgWidth = totalWidth + imgPadding * 2;
+        const imgHeight = totalHeight + imgPadding * 2;
+        ctx.drawImage(
+            Game.islandImg,
+            left - imgPadding,
+            top - imgPadding,
+            imgWidth,
+            imgHeight
+        );
+    } else {
+        // Fallback: simple green rounded rect if image not loaded
+        ctx.save();
+        ctx.fillStyle = '#2d5a2d';
+        ctx.beginPath();
+        ctx.roundRect(left, top, totalWidth, totalHeight, 14);
+        ctx.fill();
+        ctx.restore();
+    }
     
     // Grid cells
     for (let r = 0; r < island.size; r++) {
