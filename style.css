@@ -750,6 +750,8 @@ body {
 .bot-panel {
     max-width: 500px;
     width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .bot-desc {

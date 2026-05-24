@@ -147,10 +147,13 @@
         <!-- Bot Panel Modal -->
         <div id="bot-modal" class="hidden">
             <div class="modal-content bot-panel">
-                <h2>⚔️ Rivalen</h2>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h2 style="margin:0">⚔️ Rivalen</h2>
+                    <button class="btn-primary" onclick="closeBotPanel()" style="padding:4px 12px;font-size:0.8rem">✕</button>
+                </div>
                 <p class="bot-desc">Daag rivalen uit voor hun resources! Maar pas op: verlies je, dan nemen zij 25% van jouw resources.</p>
                 <div id="bot-list"></div>
-                <button class="btn-primary" onclick="closeBotPanel()" style="margin-top:10px">Sluiten</button>
+                <button class="btn-primary" onclick="closeBotPanel()" style="margin-top:10px;width:100%">Sluiten</button>
             </div>
         </div>
 
@@ -231,7 +234,7 @@
             if (window.caches) {
                 caches.keys().then(keys => {
                     keys.forEach(k => {
-                        if (k !== 'tiny-kingdom-v7') caches.delete(k);
+                        if (k !== 'tiny-kingdom-v8') caches.delete(k);
                     });
                 });
             }
