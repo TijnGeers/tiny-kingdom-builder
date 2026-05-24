@@ -2892,7 +2892,10 @@ function renderBuildingMenu() {
             <span class="b-cost">${costText}</span>
         `;
         
-        card.addEventListener('click', () => selectBuilding(type, card));
+        card.addEventListener('click', () => {
+            showBuildingInfo(type);
+            selectBuilding(type, card);
+        });
         card.addEventListener('mouseenter', () => showBuildingInfo(type));
         
         list.appendChild(card);
@@ -2933,8 +2936,6 @@ function selectBuilding(type, card) {
     
     if (type === 'demolish') {
         showInfo('🔴 Sloopmodus: Klik op een gebouw, brug of leeg eiland om te slopen.');
-    } else {
-        showInfo(`${BUILDINGS[type].icon} ${BUILDINGS[type].name} geselecteerd. Klik op een lege plek op een eiland.`);
     }
 }
 
