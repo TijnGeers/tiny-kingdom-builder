@@ -11,6 +11,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 <body>
+    <!-- Rotate phone message (shown in portrait on mobile) -->
+    <div id="rotate-message">
+        <div class="rotate-icon">📱</div>
+        <p>Draai je telefoon horizontaal om te spelen!</p>
+        <p style="font-size:0.8rem;color:#778">🏰 Tiny Kingdom Builder</p>
+    </div>
+
     <div id="game-container">
         <!-- Title Screen -->
         <div id="title-screen">
@@ -224,7 +231,7 @@
             if (window.caches) {
                 caches.keys().then(keys => {
                     keys.forEach(k => {
-                        if (k !== 'tiny-kingdom-v4') caches.delete(k);
+                        if (k !== 'tiny-kingdom-v5') caches.delete(k);
                     });
                 });
             }
