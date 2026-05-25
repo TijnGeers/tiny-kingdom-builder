@@ -303,6 +303,72 @@ const BUILDINGS = {
         income: {},
         special: 'dragon_stable',
     },
+    vissershut: {
+        name: 'Vissershut',
+        icon: '🎣',
+        cost: { gold: 20, wood: 15 },
+        provides: {},
+        description: 'Vangt vis voor voedsel. 20% kans op extra goud per tick.',
+        synergies: { haven: '+3 voedsel', lighthouse: '+2 goud' },
+        penalties: {},
+        income: { food: 4 },
+        special: 'vissershut',
+    },
+    ziekenhuis: {
+        name: 'Ziekenhuis',
+        icon: '🏥',
+        cost: { gold: 50, stone: 25, iron: 5 },
+        provides: { population: 1 },
+        description: 'Voorkomt bevolkingsverlies bij hongersnood. +1 bevolking.',
+        synergies: { house: '+1 pop', mansion: '+2 pop' },
+        penalties: {},
+        income: {},
+        special: 'ziekenhuis',
+    },
+    kazerne: {
+        name: 'Kazerne',
+        icon: '⚔️',
+        cost: { gold: 55, stone: 30, iron: 10 },
+        provides: {},
+        description: 'Verhoogt gevechtssterkte met +20 per kazerne. Sterk naast wachttoren.',
+        synergies: { tower: '+10 sterkte' },
+        penalties: {},
+        income: {},
+        special: 'kazerne',
+    },
+    lighthouse: {
+        name: 'Vuurtoren',
+        icon: '🏠',
+        cost: { gold: 40, stone: 20, wood: 15 },
+        provides: {},
+        description: 'Handelaar verschijnt vaker (+20%). Havens produceren +50% meer. Max 1 per eiland.',
+        synergies: { haven: '+50% handel', veiling_huis: '+handelaar' },
+        penalties: {},
+        income: { gold: 1 },
+        special: 'lighthouse',
+    },
+    tuin: {
+        name: 'Tuin',
+        icon: '🌷',
+        cost: { gold: 10, wood: 5 },
+        provides: {},
+        description: 'Goedkope voedselproductie. Verhoogt geluk van nabije huizen.',
+        synergies: { house: '+1 geluk', mansion: '+2 geluk', farm: '+1 voedsel' },
+        penalties: {},
+        income: { food: 2 },
+        special: 'tuin',
+    },
+    pakhuis: {
+        name: 'Pakhuis',
+        icon: '📦',
+        cost: { gold: 35, wood: 25, stone: 10 },
+        provides: {},
+        description: 'Beschermt 15% van je resources tegen diefstal door draken en gevechten per pakhuis.',
+        synergies: { market: '+2 goud', haven: '+opslag' },
+        penalties: {},
+        income: {},
+        special: 'pakhuis',
+    },
     bridge: {
         name: 'Brug',
         icon: '🌉',
@@ -448,20 +514,48 @@ function tryBotChallenge() {
     }
 }
 
-function calculateBattleStrength(population, buildings, petDragons) {
-    const base = population * 10 + buildings * 3 + (petDragons || 0) * 25;
+function calculateBattleStrength(population, buildings, petDragons, kazerneCount) {
+    const base = population * 10 + buildings * 3 + (petDragons || 0) * 25 + (kazerneCount || 0) * 20;
     // Small random variance: ±5% of base strength
     const variance = base * 0.05 * (Math.random() * 2 - 1);
     return Math.max(1, base + variance);
 }
 
+function countBuilding(type) {
+    let count = 0;
+    if (!Game.state) return 0;
+    for (const isl of Game.state.islands) {
+        for (let r = 0; r < isl.size; r++)
+            for (let c = 0; c < isl.size; c++)
+                if (isl.grid[r][c] === type) count++;
+    }
+    return count;
+}
+
+function getPakhuisProtection() {
+    const count = countBuilding('pakhuis');
+    return Math.min(0.75, count * 0.15); // Max 75% protection
+}
+
 function resolveBattle(bot) {
     const playerDragons = Game.state.petDragons ? Game.state.petDragons.length : 0;
+    const kazerneCount = countBuilding('kazerne');
+    // Kazerne next to tower gets +10 bonus per adjacent pair
+    let kazerneBonus = 0;
+    for (const isl of Game.state.islands) {
+        for (let r = 0; r < isl.size; r++)
+            for (let c = 0; c < isl.size; c++)
+                if (isl.grid[r][c] === 'kazerne') {
+                    const nbrs = getNeighbors(isl, r, c);
+                    if (nbrs.includes('tower')) kazerneBonus += 10;
+                }
+    }
     const playerStrength = calculateBattleStrength(
         Game.state.resources.population,
         Game.state.totalBuildings,
-        playerDragons
-    );
+        playerDragons,
+        kazerneCount
+    ) + kazerneBonus;
     const botStrength = calculateBattleStrength(
         bot.population,
         bot.buildings,
@@ -490,11 +584,13 @@ function resolveBattle(bot) {
         bot.population = Math.max(1, bot.population - Math.floor(bot.population * 0.1));
         bot.buildings = Math.max(1, bot.buildings - 1);
     } else {
-        // Player loses: bot takes 25% of player resources
+        // Player loses: bot takes 25% of player resources (pakhuis reduces)
         const loss = {};
+        const protection = getPakhuisProtection();
+        const lossRate = 0.25 * (1 - protection);
         for (const res of ['gold', 'wood', 'stone', 'food', 'iron', 'wool', 'leather', 'scales']) {
             const amount = Game.state.resources[res] || 0;
-            const take = Math.floor(amount * 0.25);
+            const take = Math.floor(amount * lossRate);
             if (take > 0) {
                 loss[res] = take;
                 Game.state.resources[res] -= take;
@@ -506,6 +602,14 @@ function resolveBattle(bot) {
             results.push({ text: `-${amount} ${icons[res] || ''} ${res}`, negative: true });
         }
     }
+    
+    // Track battle stats
+    if (playerWins) {
+        Game.state.stats.totalBattlesWon++;
+    } else {
+        Game.state.stats.totalBattlesLost++;
+    }
+    addKingdomXP(playerWins ? 20 : 5);
     
     bot.challengeCooldown = 20;
     saveGame();
@@ -538,6 +642,38 @@ function createInitialState() {
         totalBuildings: 0,
         petDragons: [],
         bots: [],
+        // Day/Night & Seasons
+        dayTime: 0, // 0-240 seconds cycle (120 day, 120 night)
+        season: 0, // 0=spring, 1=summer, 2=autumn, 3=winter
+        seasonTimer: 0, // ticks until next season
+        // Kingdom Level
+        kingdomXP: 0,
+        kingdomLevel: 1,
+        // Achievements
+        achievements: [],
+        // Quests
+        activeQuests: [],
+        questCooldown: 0,
+        // Stats
+        stats: {
+            totalGoldEarned: 0,
+            totalBattlesWon: 0,
+            totalBattlesLost: 0,
+            totalBuildingsPlaced: 0,
+            totalDragonsKilled: 0,
+            totalTradesCompleted: 0,
+            totalIslandsBought: 0,
+            totalFestivalsHeld: 0,
+            totalTreasuresFound: 0,
+            totalPirateRaids: 0,
+        },
+        // Happiness
+        happiness: 50, // 0-100
+        // Active effects (festivals, decrees, weather)
+        activeEffects: [],
+        // Weather
+        weather: 'clear', // clear, rain, sun, fog, storm
+        weatherTimer: 0,
     };
 }
 
@@ -647,6 +783,20 @@ function loadGame(slot) {
             if (!data.state.alchemistConversions) data.state.alchemistConversions = [];
             if (!data.state.nestTimers) data.state.nestTimers = {};
             if (!data.state.bots) data.state.bots = [];
+            // New systems compatibility
+            if (data.state.dayTime === undefined) data.state.dayTime = 0;
+            if (data.state.season === undefined) data.state.season = 0;
+            if (data.state.seasonTimer === undefined) data.state.seasonTimer = 0;
+            if (data.state.kingdomXP === undefined) data.state.kingdomXP = 0;
+            if (data.state.kingdomLevel === undefined) data.state.kingdomLevel = 1;
+            if (!data.state.achievements) data.state.achievements = [];
+            if (!data.state.activeQuests) data.state.activeQuests = [];
+            if (data.state.questCooldown === undefined) data.state.questCooldown = 0;
+            if (!data.state.stats) data.state.stats = { totalGoldEarned: 0, totalBattlesWon: 0, totalBattlesLost: 0, totalBuildingsPlaced: 0, totalDragonsKilled: 0, totalTradesCompleted: 0, totalIslandsBought: 0, totalFestivalsHeld: 0, totalTreasuresFound: 0, totalPirateRaids: 0 };
+            if (data.state.happiness === undefined) data.state.happiness = 50;
+            if (!data.state.activeEffects) data.state.activeEffects = [];
+            if (!data.state.weather) data.state.weather = 'clear';
+            if (data.state.weatherTimer === undefined) data.state.weatherTimer = 0;
             data.slotName = data.slotName || `Save ${slot + 1}`;
             return data;
         }
@@ -1345,6 +1495,18 @@ function placeBuilding(island, row, col) {
         return;
     }
     
+    // Lighthouse: max 1 per island
+    if (Game.selectedBuilding === 'lighthouse') {
+        for (let r = 0; r < island.size; r++) {
+            for (let c = 0; c < island.size; c++) {
+                if (island.grid[r][c] === 'lighthouse') {
+                    showInfo('❌ Er kan maar 1 vuurtoren per eiland staan!');
+                    return;
+                }
+            }
+        }
+    }
+    
     // Monument: max 1 per island
     if (Game.selectedBuilding === 'monument') {
         for (let r = 0; r < island.size; r++) {
@@ -1372,6 +1534,8 @@ function placeBuilding(island, row, col) {
     // Place building
     island.grid[row][col] = Game.selectedBuilding;
     Game.state.totalBuildings++;
+    Game.state.stats.totalBuildingsPlaced++;
+    addKingdomXP(2);
     
     // Apply provides
     if (building.provides.population) {
@@ -1454,9 +1618,12 @@ function calculateIncome() {
                 
                 const building = BUILDINGS[type];
                 
-                // Base income
+                // Base income (with building level and day/night multiplier)
+                const bLevel = getBuildingLevel(island, r, c);
+                const levelMult = bLevel === 1 ? 1.0 : bLevel === 2 ? 1.5 : 2.0;
+                const dayNightMult = getDayNightMultiplier(type);
                 for (const [res, amount] of Object.entries(building.income || {})) {
-                    income[res] += amount;
+                    income[res] += Math.round(amount * levelMult * dayNightMult);
                 }
                 
                 // Synergy bonuses
@@ -1481,6 +1648,10 @@ function calculateIncome() {
                     if (type === 'bakkerij' && neighbor === 'house') income.gold += 1;
                     if (type === 'bakkerij' && neighbor === 'mansion') income.gold += 2;
                     if (type === 'veiling_huis' && neighbor === 'market') income.gold += 2;
+                    if (type === 'vissershut' && neighbor === 'haven') income.food += 3;
+                    if (type === 'vissershut' && neighbor === 'lighthouse') income.gold += 2;
+                    if (type === 'tuin' && neighbor === 'farm') income.food += 1;
+                    if (type === 'pakhuis' && neighbor === 'market') income.gold += 2;
                     // alchemist_lab is interactive - no passive synergy
                 }
                 
@@ -1606,6 +1777,8 @@ function placeIslandAt(worldX, worldY) {
     Game.state.islands.push(newIsland);
     
     Game.placingIsland = false;
+    Game.state.stats.totalIslandsBought++;
+    addKingdomXP(10);
     showInfo('🏝️ Nieuw eiland geplaatst!');
     saveGame();
     updateUI();
@@ -1793,14 +1966,23 @@ function tickIncome(dt) {
 
 function collectIncome() {
     const income = calculateIncome();
-    Game.state.resources.gold += income.gold;
-    Game.state.resources.wood += income.wood;
-    Game.state.resources.stone += income.stone;
-    Game.state.resources.food += income.food;
-    Game.state.resources.scales = (Game.state.resources.scales || 0) + income.scales;
-    Game.state.resources.wool = (Game.state.resources.wool || 0) + income.wool;
-    Game.state.resources.leather = (Game.state.resources.leather || 0) + income.leather;
-    Game.state.resources.iron = (Game.state.resources.iron || 0) + income.iron;
+    
+    // Apply global multipliers (kingdom level, happiness, season, weather, active effects)
+    const kingdomMult = getKingdomIncomeBonus();
+    Game.state.happiness = calculateHappiness();
+    const happyMult = getHappinessMultiplier();
+    
+    for (const res of ['gold', 'wood', 'stone', 'food', 'scales', 'wool', 'leather', 'iron']) {
+        const seasonMult = getSeasonMultiplier(res);
+        const weatherMult = getWeatherMultiplier(res);
+        const effectMult = getActiveEffectMultiplier(res);
+        const totalMult = kingdomMult * happyMult * seasonMult * weatherMult * effectMult;
+        const adjusted = Math.round(income[res] * totalMult);
+        Game.state.resources[res] = (Game.state.resources[res] || 0) + adjusted;
+    }
+    
+    // Track gold earned stat
+    if (income.gold > 0) Game.state.stats.totalGoldEarned += income.gold;
     
     // Clamp resources (don't go below 0)
     Game.state.resources.gold = Math.max(0, Game.state.resources.gold);
@@ -1836,12 +2018,14 @@ function collectIncome() {
             }
         }
     }
+    // Lighthouse boosts haven output by 50%
+    const havenMultiplier = lighthouseCount > 0 ? 1.5 : 1.0;
     for (let h = 0; h < havenCount; h++) {
         const roll = Math.random();
         if (roll < 0.5) {
             const resources = ['wood', 'stone', 'food', 'iron', 'wool', 'leather'];
             const res = resources[Math.floor(Math.random() * resources.length)];
-            const amount = 3 + Math.floor(Math.random() * 8);
+            const amount = Math.floor((3 + Math.floor(Math.random() * 8)) * havenMultiplier);
             Game.state.resources[res] = (Game.state.resources[res] || 0) + amount;
         }
     }
@@ -1922,14 +2106,39 @@ function collectIncome() {
         }
     }
     
-    // Food shortage -> lose population
+    // Vissershut gold chance (20% per vissershut)
+    let vissershutCount = 0;
+    for (const isl of Game.state.islands) {
+        for (let r = 0; r < isl.size; r++)
+            for (let c = 0; c < isl.size; c++)
+                if (isl.grid[r][c] === 'vissershut') vissershutCount++;
+    }
+    for (let v = 0; v < vissershutCount; v++) {
+        if (Math.random() < 0.2) {
+            const bonus = 3 + Math.floor(Math.random() * 8);
+            Game.state.resources.gold += bonus;
+            showEventModal('🎣 Goede Vangst!', 'Je vissers hebben iets waardevols gevangen!', [{ text: `+${bonus} goud`, negative: false }]);
+        }
+    }
+    
+    // Food shortage -> lose population (ziekenhuis prevents this)
+    let hasZiekenhuis = false;
+    for (const isl of Game.state.islands) {
+        for (let r = 0; r < isl.size; r++)
+            for (let c = 0; c < isl.size; c++)
+                if (isl.grid[r][c] === 'ziekenhuis') hasZiekenhuis = true;
+    }
     if (Game.state.resources.food <= 0 && income.food < 0) {
-        Game.state.resources.population = Math.max(1, Game.state.resources.population - 1);
-        showEventModal(
-            '🍽️ Hongersnood!',
-            'Je volk heeft niet genoeg voedsel! Een bewoner is vertrokken.',
-            [{ text: '-1 Bevolking', negative: true }]
-        );
+        if (hasZiekenhuis) {
+            showEventModal('🏥 Ziekenhuis', 'Het ziekenhuis voorkomt dat bewoners vertrekken door honger!', [{ text: 'Bevolking beschermd!', negative: false }]);
+        } else {
+            Game.state.resources.population = Math.max(1, Game.state.resources.population - 1);
+            showEventModal(
+                '🍽️ Hongersnood!',
+                'Je volk heeft niet genoeg voedsel! Een bewoner is vertrokken.',
+                [{ text: '-1 Bevolking', negative: true }]
+            );
+        }
     }
     
     // Wind events
@@ -1949,7 +2158,7 @@ function collectIncome() {
         }
     }
     Game.state.dragonTimer += Math.random() * 6 * (1 + sheepStables * 0.3);
-    if (Game.state.dragonTimer >= 70) {
+    if (Game.state.dragonTimer >= 70 && Game.state.weather !== 'storm') {
         triggerDragonEvent();
         Game.state.dragonTimer = 0;
     }
@@ -1968,14 +2177,34 @@ function collectIncome() {
             }
         }
     }
+    // Lighthouse boosts trader chance
+    let lighthouseCount = 0;
+    for (const isl of Game.state.islands) {
+        for (let r = 0; r < isl.size; r++)
+            for (let c = 0; c < isl.size; c++)
+                if (isl.grid[r][c] === 'lighthouse') lighthouseCount++;
+    }
     if (!Game.trader) {
-        const traderChance = Math.min(1, 0.10 + veilingCount * 0.15);
+        const fogPenalty = Game.state.weather === 'fog' ? 0.7 : 1.0;
+        const traderChance = Math.min(1, (0.10 + veilingCount * 0.15 + lighthouseCount * 0.20) * fogPenalty);
         if (Math.random() < traderChance) spawnTrader();
     }
     
     // Bot growth and challenges
     tickBots();
     tryBotChallenge();
+    
+    // NEW SYSTEMS
+    tickSeason();
+    tickQuests();
+    tickWeather();
+    tickActiveEffects();
+    tryFestival();
+    tryPirateRaid();
+    tryTreasureMap();
+    tickTradeRoutes();
+    checkAchievements();
+    addKingdomXP(1); // Passive XP per income tick
     
     // Spawn income particles on buildings
     spawnIncomeParticles();
@@ -2222,8 +2451,10 @@ function triggerDragonEvent() {
     
     const stealOptions = ['gold', 'wood', 'stone', 'food'];
     const stolen = stealOptions[Math.floor(Math.random() * stealOptions.length)];
-    const amount = 10 + Math.floor(Math.random() * 20);
-    const actualStolen = Math.min(amount, Game.state.resources[stolen]);
+    const dragonStealAmount = 10 + Math.floor(Math.random() * 20);
+    const pakhuisProt = getPakhuisProtection();
+    const reducedAmount = Math.floor(dragonStealAmount * (1 - pakhuisProt));
+    const actualStolen = Math.min(reducedAmount, Game.state.resources[stolen]);
     Game.state.resources[stolen] -= actualStolen;
     
     const resNames = { gold: 'Goud', wood: 'Hout', stone: 'Steen', food: 'Voedsel' };
@@ -2526,6 +2757,10 @@ function executeTrade(offerIndex) {
     
     // Decrease stock
     offer.stockLeft--;
+    
+    // Track trade stat
+    Game.state.stats.totalTradesCompleted++;
+    addKingdomXP(3);
     
     showInfo(`✅ ${offer.name} gekocht!`);
     saveGame();
@@ -2908,6 +3143,587 @@ function closeAlchemistLab() {
     currentAlchLab = null;
 }
 
+// ============================================
+// DAY/NIGHT CYCLE
+// ============================================
+const DAY_CYCLE_LENGTH = 240; // 240 seconds = 4 min full cycle
+function tickDayNight(dt) {
+    if (!Game.state) return;
+    Game.state.dayTime = (Game.state.dayTime + dt) % DAY_CYCLE_LENGTH;
+}
+
+function isDaytime() {
+    if (!Game.state) return true;
+    return Game.state.dayTime < DAY_CYCLE_LENGTH / 2;
+}
+
+function getDayNightMultiplier(type) {
+    const day = isDaytime();
+    if (type === 'farm' || type === 'vissershut' || type === 'tuin') return day ? 1.3 : 0.7;
+    if (type === 'tavern' || type === 'market') return day ? 0.8 : 1.4;
+    if (type === 'lumbermill' || type === 'quarry' || type === 'smelterij') return day ? 1.1 : 0.9;
+    return 1.0;
+}
+
+// ============================================
+// SEASONS SYSTEM
+// ============================================
+const SEASON_NAMES = ['🌸 Lente', '☀️ Zomer', '🍂 Herfst', '❄️ Winter'];
+const SEASON_TICKS = 30; // 30 income ticks per season (~5 min)
+
+function tickSeason() {
+    if (!Game.state) return;
+    Game.state.seasonTimer++;
+    if (Game.state.seasonTimer >= SEASON_TICKS) {
+        Game.state.seasonTimer = 0;
+        Game.state.season = (Game.state.season + 1) % 4;
+        showEventModal(`${SEASON_NAMES[Game.state.season]}`, `Het seizoen verandert naar ${SEASON_NAMES[Game.state.season]}!`, [{ text: getSeasonEffect(), negative: false }]);
+    }
+}
+
+function getSeasonEffect() {
+    switch (Game.state.season) {
+        case 0: return 'Lente: +20% voedsel, +10% hout';
+        case 1: return 'Zomer: +30% goud, +20% voedsel';
+        case 2: return 'Herfst: +20% hout, +20% steen';
+        case 3: return 'Winter: -20% voedsel, +10% ijzer';
+        default: return '';
+    }
+}
+
+function getSeasonMultiplier(resource) {
+    if (!Game.state) return 1.0;
+    switch (Game.state.season) {
+        case 0: // Spring
+            if (resource === 'food') return 1.2;
+            if (resource === 'wood') return 1.1;
+            return 1.0;
+        case 1: // Summer
+            if (resource === 'gold') return 1.3;
+            if (resource === 'food') return 1.2;
+            return 1.0;
+        case 2: // Autumn
+            if (resource === 'wood') return 1.2;
+            if (resource === 'stone') return 1.2;
+            return 1.0;
+        case 3: // Winter
+            if (resource === 'food') return 0.8;
+            if (resource === 'iron') return 1.1;
+            return 1.0;
+        default: return 1.0;
+    }
+}
+
+// ============================================
+// KINGDOM LEVEL SYSTEM
+// ============================================
+const KINGDOM_LEVELS = [
+    { level: 1, xp: 0, title: 'Gehucht', bonus: '' },
+    { level: 2, xp: 50, title: 'Dorp', bonus: '+5% inkomen' },
+    { level: 3, xp: 150, title: 'Stadje', bonus: '+10% inkomen' },
+    { level: 4, xp: 350, title: 'Stad', bonus: '+15% inkomen' },
+    { level: 5, xp: 600, title: 'Grote Stad', bonus: '+20% inkomen' },
+    { level: 6, xp: 1000, title: 'Metropool', bonus: '+25% inkomen' },
+    { level: 7, xp: 1500, title: 'Koninkrijk', bonus: '+30% inkomen' },
+    { level: 8, xp: 2500, title: 'Keizerrijk', bonus: '+35% inkomen' },
+    { level: 9, xp: 4000, title: 'Legendarisch Rijk', bonus: '+40% inkomen' },
+    { level: 10, xp: 6000, title: 'Mythisch Imperium', bonus: '+50% inkomen' },
+];
+
+function addKingdomXP(amount) {
+    if (!Game.state) return;
+    Game.state.kingdomXP += amount;
+    const oldLevel = Game.state.kingdomLevel;
+    // Check for level up
+    for (let i = KINGDOM_LEVELS.length - 1; i >= 0; i--) {
+        if (Game.state.kingdomXP >= KINGDOM_LEVELS[i].xp) {
+            Game.state.kingdomLevel = KINGDOM_LEVELS[i].level;
+            break;
+        }
+    }
+    if (Game.state.kingdomLevel > oldLevel) {
+        const lvl = KINGDOM_LEVELS[Game.state.kingdomLevel - 1];
+        showEventModal('👑 Level Up!', `Je koninkrijk is nu een ${lvl.title}!`, [{ text: lvl.bonus, negative: false }]);
+    }
+}
+
+function getKingdomIncomeBonus() {
+    if (!Game.state) return 1.0;
+    const bonuses = [1.0, 1.0, 1.05, 1.10, 1.15, 1.20, 1.25, 1.30, 1.35, 1.40, 1.50];
+    return bonuses[Math.min(Game.state.kingdomLevel, bonuses.length - 1)];
+}
+
+// ============================================
+// ACHIEVEMENTS SYSTEM
+// ============================================
+const ACHIEVEMENTS = [
+    { id: 'first_building', name: '🏗️ Eerste Gebouw', desc: 'Plaats je eerste gebouw', check: (s) => s.totalBuildings >= 1, reward: { gold: 20 } },
+    { id: 'builder_10', name: '🏘️ Bouwerij', desc: 'Plaats 10 gebouwen', check: (s) => s.totalBuildings >= 10, reward: { gold: 50 } },
+    { id: 'builder_25', name: '🏙️ Stedenbouwer', desc: 'Plaats 25 gebouwen', check: (s) => s.totalBuildings >= 25, reward: { gold: 100, wood: 50 } },
+    { id: 'rich_100', name: '💰 Welvarend', desc: 'Heb 100 goud', check: (s) => s.resources.gold >= 100, reward: { gold: 25 } },
+    { id: 'rich_500', name: '💎 Schatrijk', desc: 'Heb 500 goud', check: (s) => s.resources.gold >= 500, reward: { gold: 100 } },
+    { id: 'rich_2000', name: '👑 Goudmagnaat', desc: 'Heb 2000 goud', check: (s) => s.resources.gold >= 2000, reward: { gold: 500 } },
+    { id: 'islands_3', name: '🏝️ Eilandenrijk', desc: 'Bezit 3 eilanden', check: (s) => s.islands.length >= 3, reward: { gold: 50, stone: 30 } },
+    { id: 'islands_5', name: '🌊 Archipel', desc: 'Bezit 5 eilanden', check: (s) => s.islands.length >= 5, reward: { gold: 100, stone: 50 } },
+    { id: 'pop_10', name: '👥 Gemeenschap', desc: '10 bevolking', check: (s) => s.resources.population >= 10, reward: { food: 30 } },
+    { id: 'pop_25', name: '👥 Volksstam', desc: '25 bevolking', check: (s) => s.resources.population >= 25, reward: { food: 60, gold: 50 } },
+    { id: 'dragon_friend', name: '🐲 Drakenvriend', desc: 'Bevriend een draakje', check: (s) => s.petDragons && s.petDragons.length >= 1, reward: { scales: 10 } },
+    { id: 'dragon_army', name: '🐉 Drakenleger', desc: 'Heb 5 draakjes', check: (s) => s.petDragons && s.petDragons.length >= 5, reward: { scales: 30, gold: 100 } },
+    { id: 'battle_won', name: '⚔️ Overwinnaar', desc: 'Win een gevecht', check: (s) => s.stats && s.stats.totalBattlesWon >= 1, reward: { gold: 30 } },
+    { id: 'battle_5', name: '🏆 Krijgsheer', desc: 'Win 5 gevechten', check: (s) => s.stats && s.stats.totalBattlesWon >= 5, reward: { gold: 100, iron: 20 } },
+    { id: 'trade_5', name: '🤝 Handelaar', desc: 'Voltooi 5 trades', check: (s) => s.stats && s.stats.totalTradesCompleted >= 5, reward: { gold: 50 } },
+    { id: 'level_5', name: '⭐ Grote Stad', desc: 'Bereik kingdom level 5', check: (s) => s.kingdomLevel >= 5, reward: { gold: 200 } },
+    { id: 'level_10', name: '🌟 Mythisch', desc: 'Bereik kingdom level 10', check: (s) => s.kingdomLevel >= 10, reward: { gold: 1000 } },
+    { id: 'all_resources', name: '📊 Verzamelaar', desc: 'Heb elke resource >10', check: (s) => ['gold','wood','stone','food','iron','wool','leather','scales'].every(r => (s.resources[r]||0) >= 10), reward: { gold: 75 } },
+];
+
+function checkAchievements() {
+    if (!Game.state) return;
+    for (const ach of ACHIEVEMENTS) {
+        if (Game.state.achievements.includes(ach.id)) continue;
+        if (ach.check(Game.state)) {
+            Game.state.achievements.push(ach.id);
+            // Grant reward
+            for (const [res, amount] of Object.entries(ach.reward)) {
+                Game.state.resources[res] = (Game.state.resources[res] || 0) + amount;
+            }
+            const rewardText = Object.entries(ach.reward).map(([r,a]) => {
+                const icons = { gold: '💰', wood: '🪵', stone: '🪨', food: '🌾', iron: '⚙️', scales: '🐲', wool: '🧶', leather: '👜' };
+                return `+${a} ${icons[r]||''}`;
+            }).join(' ');
+            showEventModal(`🏆 ${ach.name}`, ach.desc, [{ text: rewardText, negative: false }]);
+            addKingdomXP(10);
+        }
+    }
+}
+
+// ============================================
+// QUEST SYSTEM
+// ============================================
+const QUEST_TEMPLATES = [
+    { type: 'build', desc: 'Bouw {n} gebouwen', targets: [3, 5, 8], reward: { gold: 40 } },
+    { type: 'gold', desc: 'Verdien {n} goud', targets: [100, 200, 500], reward: { wood: 30, stone: 20 } },
+    { type: 'food', desc: 'Verzamel {n} voedsel', targets: [50, 100, 200], reward: { gold: 50 } },
+    { type: 'wood', desc: 'Verzamel {n} hout', targets: [50, 100], reward: { gold: 40, stone: 20 } },
+    { type: 'stone', desc: 'Verzamel {n} steen', targets: [40, 80], reward: { gold: 40, wood: 20 } },
+    { type: 'trade', desc: 'Handel {n} keer', targets: [1, 3], reward: { gold: 60 } },
+    { type: 'battle', desc: 'Vecht {n} gevechten', targets: [1, 2], reward: { gold: 80, iron: 10 } },
+];
+
+function generateQuest() {
+    const template = QUEST_TEMPLATES[Math.floor(Math.random() * QUEST_TEMPLATES.length)];
+    const target = template.targets[Math.floor(Math.random() * template.targets.length)];
+    const rewardMult = 1 + (Game.state.kingdomLevel - 1) * 0.1;
+    const reward = {};
+    for (const [r, a] of Object.entries(template.reward)) {
+        reward[r] = Math.floor(a * rewardMult);
+    }
+    return {
+        id: Math.random().toString(36).substr(2, 9),
+        type: template.type,
+        desc: template.desc.replace('{n}', target),
+        target: target,
+        progress: 0,
+        reward: reward,
+        expired: false,
+        ticksLeft: 60, // 60 income ticks = ~10 min
+    };
+}
+
+function tickQuests() {
+    if (!Game.state) return;
+    // Generate new quests if needed
+    if (Game.state.activeQuests.length < 2 && Game.state.questCooldown <= 0) {
+        Game.state.activeQuests.push(generateQuest());
+        Game.state.questCooldown = 6; // Wait 6 ticks before next quest
+    }
+    if (Game.state.questCooldown > 0) Game.state.questCooldown--;
+    
+    // Update quest progress
+    for (let i = Game.state.activeQuests.length - 1; i >= 0; i--) {
+        const q = Game.state.activeQuests[i];
+        q.ticksLeft--;
+        
+        // Auto-progress based on type
+        if (q.type === 'build') q.progress = Game.state.totalBuildings;
+        if (q.type === 'gold') q.progress = Math.floor(Game.state.resources.gold);
+        if (q.type === 'food') q.progress = Math.floor(Game.state.resources.food);
+        if (q.type === 'wood') q.progress = Math.floor(Game.state.resources.wood);
+        if (q.type === 'stone') q.progress = Math.floor(Game.state.resources.stone);
+        if (q.type === 'trade') q.progress = Game.state.stats.totalTradesCompleted;
+        if (q.type === 'battle') q.progress = Game.state.stats.totalBattlesWon + Game.state.stats.totalBattlesLost;
+        
+        if (q.progress >= q.target) {
+            // Quest completed!
+            for (const [res, amount] of Object.entries(q.reward)) {
+                Game.state.resources[res] = (Game.state.resources[res] || 0) + amount;
+            }
+            const rewardText = Object.entries(q.reward).map(([r,a]) => {
+                const icons = { gold: '💰', wood: '🪵', stone: '🪨', food: '🌾', iron: '⚙️', scales: '🐲' };
+                return `+${a} ${icons[r]||''}`;
+            }).join(' ');
+            showEventModal('📜 Quest Voltooid!', q.desc, [{ text: rewardText, negative: false }]);
+            addKingdomXP(15);
+            Game.state.activeQuests.splice(i, 1);
+        } else if (q.ticksLeft <= 0) {
+            // Quest expired
+            Game.state.activeQuests.splice(i, 1);
+        }
+    }
+}
+
+// ============================================
+// HAPPINESS SYSTEM
+// ============================================
+function calculateHappiness() {
+    if (!Game.state) return 50;
+    let happiness = 50; // Base
+    
+    // Tuinen add happiness
+    happiness += countBuilding('tuin') * 5;
+    // Taverns
+    happiness += countBuilding('tavern') * 3;
+    // Food surplus = happy
+    if (Game.state.resources.food > 50) happiness += 10;
+    if (Game.state.resources.food <= 0) happiness -= 20;
+    // Low population relative to max = unhappy
+    if (Game.state.resources.population < Game.state.maxPopulation * 0.5) happiness -= 10;
+    // Many buildings = proud
+    if (Game.state.totalBuildings > 15) happiness += 5;
+    if (Game.state.totalBuildings > 30) happiness += 5;
+    // Active festival
+    if (Game.state.activeEffects.some(e => e.type === 'festival')) happiness += 15;
+    // Winter penalty
+    if (Game.state.season === 3) happiness -= 5;
+    // Summer bonus
+    if (Game.state.season === 1) happiness += 5;
+    
+    return Math.max(0, Math.min(100, happiness));
+}
+
+function getHappinessMultiplier() {
+    if (!Game.state) return 1.0;
+    const h = Game.state.happiness;
+    if (h >= 80) return 1.15;
+    if (h >= 60) return 1.05;
+    if (h >= 40) return 1.0;
+    if (h >= 20) return 0.9;
+    return 0.8;
+}
+
+// ============================================
+// WEATHER SYSTEM
+// ============================================
+const WEATHER_TYPES = ['clear', 'rain', 'sun', 'fog', 'storm'];
+
+function tickWeather() {
+    if (!Game.state) return;
+    Game.state.weatherTimer++;
+    if (Game.state.weatherTimer >= 15 + Math.floor(Math.random() * 10)) {
+        Game.state.weatherTimer = 0;
+        const oldWeather = Game.state.weather;
+        Game.state.weather = WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)];
+        if (Game.state.weather !== oldWeather) {
+            const names = { clear: '☀️ Helder', rain: '🌧️ Regen', sun: '🌤️ Zonnig', fog: '🌫️ Mist', storm: '⛈️ Onweer' };
+            showEventModal(names[Game.state.weather], getWeatherDesc(Game.state.weather), [{ text: getWeatherEffect(Game.state.weather), negative: Game.state.weather === 'storm' }]);
+        }
+    }
+}
+
+function getWeatherDesc(w) {
+    switch(w) {
+        case 'clear': return 'Het weer is helder en aangenaam.';
+        case 'rain': return 'Regen bevordert de gewassen maar vertraagt bouw.';
+        case 'sun': return 'Stralende zon geeft een boost aan alles!';
+        case 'fog': return 'Dichte mist. Handelaars komen minder vaak.';
+        case 'storm': return 'Onweer! Productie verminderd maar draken blijven weg.';
+        default: return '';
+    }
+}
+
+function getWeatherEffect(w) {
+    switch(w) {
+        case 'clear': return 'Normaal weer';
+        case 'rain': return '+20% voedsel, -10% goud';
+        case 'sun': return '+15% alles';
+        case 'fog': return '-30% handelaar kans';
+        case 'storm': return '-20% inkomen, geen draken';
+        default: return '';
+    }
+}
+
+function getWeatherMultiplier(resource) {
+    if (!Game.state) return 1.0;
+    switch(Game.state.weather) {
+        case 'rain': return resource === 'food' ? 1.2 : resource === 'gold' ? 0.9 : 1.0;
+        case 'sun': return 1.15;
+        case 'fog': return 0.95;
+        case 'storm': return 0.8;
+        default: return 1.0;
+    }
+}
+
+// ============================================
+// FESTIVAL EVENTS
+// ============================================
+function tryFestival() {
+    if (!Game.state) return;
+    if (Game.state.activeEffects.some(e => e.type === 'festival')) return;
+    if (Math.random() < 0.03) {
+        const festivals = [
+            { name: '🎉 Oogstfeest', desc: '+30% voedsel productie voor 3 minuten!', bonus: 'food', mult: 1.3, duration: 18 },
+            { name: '🎊 Goudenfeest', desc: '+25% goud inkomen voor 3 minuten!', bonus: 'gold', mult: 1.25, duration: 18 },
+            { name: '🎶 Muziekfestival', desc: '+20% alle productie voor 2 minuten!', bonus: 'all', mult: 1.2, duration: 12 },
+            { name: '🍻 Tavernenfeest', desc: '+40% goud uit tavernes voor 3 minuten!', bonus: 'tavern_gold', mult: 1.4, duration: 18 },
+        ];
+        const fest = festivals[Math.floor(Math.random() * festivals.length)];
+        Game.state.activeEffects.push({ type: 'festival', name: fest.name, bonus: fest.bonus, mult: fest.mult, ticksLeft: fest.duration });
+        Game.state.stats.totalFestivalsHeld++;
+        addKingdomXP(5);
+        showEventModal(fest.name, fest.desc, [{ text: 'Festival begonnen!', negative: false }]);
+    }
+}
+
+// ============================================
+// PIRATE RAIDS
+// ============================================
+function tryPirateRaid() {
+    if (!Game.state) return;
+    if (countBuilding('haven') === 0) return;
+    if (Game.state.weather === 'storm') return; // No pirates in storms
+    if (Math.random() < 0.02) {
+        const havenCount = countBuilding('haven');
+        const lighthouseCount = countBuilding('lighthouse');
+        // Lighthouses reduce pirate damage
+        const protection = Math.min(0.6, lighthouseCount * 0.2);
+        
+        const stealRes = ['gold', 'wood', 'food'][Math.floor(Math.random() * 3)];
+        const baseSteal = 15 + Math.floor(Math.random() * 25) + havenCount * 5;
+        const actualSteal = Math.floor(baseSteal * (1 - protection) * (1 - getPakhuisProtection()));
+        const taken = Math.min(actualSteal, Game.state.resources[stealRes] || 0);
+        Game.state.resources[stealRes] -= taken;
+        
+        Game.state.stats.totalPirateRaids++;
+        const icons = { gold: '💰', wood: '🪵', food: '🌾' };
+        showEventModal('🏴‍☠️ Piraten!', 'Piraten hebben je haven geplunderd!', [{ text: `-${taken} ${icons[stealRes]}`, negative: true }]);
+    }
+}
+
+// ============================================
+// TREASURE MAPS
+// ============================================
+function tryTreasureMap() {
+    if (!Game.state) return;
+    if (Math.random() < 0.02) {
+        const treasures = [
+            { name: '🗺️ Oude Schatkaart', rewards: { gold: 30 + Math.floor(Math.random() * 50) } },
+            { name: '💎 Verborgen Juwelen', rewards: { gold: 50 + Math.floor(Math.random() * 80), scales: 5 } },
+            { name: '📜 Vergeten Schatkist', rewards: { gold: 20, wood: 30, stone: 30, food: 30 } },
+            { name: '⚙️ Oud IJzerdepot', rewards: { iron: 15 + Math.floor(Math.random() * 20), stone: 20 } },
+            { name: '🧶 Verlaten Textielhandel', rewards: { wool: 20, leather: 20, gold: 25 } },
+            { name: '🐲 Drakengrot', rewards: { scales: 15 + Math.floor(Math.random() * 15), gold: 40 } },
+        ];
+        const treasure = treasures[Math.floor(Math.random() * treasures.length)];
+        for (const [res, amount] of Object.entries(treasure.rewards)) {
+            Game.state.resources[res] = (Game.state.resources[res] || 0) + amount;
+        }
+        Game.state.stats.totalTreasuresFound++;
+        addKingdomXP(8);
+        const rewardText = Object.entries(treasure.rewards).map(([r,a]) => {
+            const icons = { gold: '💰', wood: '🪵', stone: '🪨', food: '🌾', iron: '⚙️', scales: '🐲', wool: '🧶', leather: '👜' };
+            return `+${a} ${icons[r]||''}`;
+        }).join(' ');
+        showEventModal(treasure.name, 'Je ontdekkingsreizigers hebben iets gevonden!', [{ text: rewardText, negative: false }]);
+    }
+}
+
+// ============================================
+// ROYAL DECREE SYSTEM
+// ============================================
+const DECREES = [
+    { name: '📜 Productie Decreet', desc: '+25% alle productie voor 5 min', cost: 100, bonus: 'all', mult: 1.25, duration: 30 },
+    { name: '📜 Goud Decreet', desc: '+50% goud inkomen voor 5 min', cost: 80, bonus: 'gold', mult: 1.5, duration: 30 },
+    { name: '📜 Bouwers Decreet', desc: '+40% hout & steen voor 5 min', cost: 60, bonus: 'build_res', mult: 1.4, duration: 30 },
+    { name: '📜 Voedsel Decreet', desc: '+40% voedsel voor 5 min', cost: 50, bonus: 'food', mult: 1.4, duration: 30 },
+    { name: '📜 Feest Decreet', desc: '+20 geluk voor 5 min', cost: 70, bonus: 'happiness', mult: 1, duration: 30 },
+];
+
+function issueDecree(decreeIndex) {
+    if (!Game.state) return;
+    const decree = DECREES[decreeIndex];
+    if (!decree) return;
+    if (Game.state.resources.gold < decree.cost) {
+        showInfo('❌ Niet genoeg goud!');
+        return;
+    }
+    if (Game.state.activeEffects.some(e => e.type === 'decree')) {
+        showInfo('❌ Er is al een decreet actief!');
+        return;
+    }
+    Game.state.resources.gold -= decree.cost;
+    Game.state.activeEffects.push({ type: 'decree', name: decree.name, bonus: decree.bonus, mult: decree.mult, ticksLeft: decree.duration });
+    addKingdomXP(5);
+    showEventModal(decree.name, decree.desc, [{ text: `Kost: ${decree.cost} 💰`, negative: false }]);
+    saveGame();
+    updateUI();
+}
+
+// ============================================
+// AUTO-TRADE ROUTES
+// ============================================
+function tickTradeRoutes() {
+    if (!Game.state) return;
+    const havenCount = countBuilding('haven');
+    if (havenCount < 2) return; // Need at least 2 havens
+    
+    // Connected havens generate passive income
+    const routes = Math.floor(havenCount / 2);
+    for (let i = 0; i < routes; i++) {
+        const resources = ['gold', 'wood', 'stone', 'food'];
+        const res = resources[Math.floor(Math.random() * resources.length)];
+        const amount = 2 + Math.floor(Math.random() * 4);
+        Game.state.resources[res] = (Game.state.resources[res] || 0) + amount;
+    }
+}
+
+// ============================================
+// BUILDING UPGRADE SYSTEM
+// ============================================
+function getBuildingLevel(island, row, col) {
+    if (!island.buildingLevels) return 1;
+    const key = `${row}_${col}`;
+    return island.buildingLevels[key] || 1;
+}
+
+function getUpgradeCost(type, currentLevel) {
+    const building = BUILDINGS[type];
+    if (!building || !building.cost) return null;
+    if (currentLevel >= 3) return null; // Max level 3
+    const mult = currentLevel === 1 ? 2.0 : 3.5;
+    const cost = {};
+    for (const [res, amount] of Object.entries(building.cost)) {
+        cost[res] = Math.floor(amount * mult);
+    }
+    return cost;
+}
+
+function upgradeBuilding(island, row, col) {
+    const type = island.grid[row][col];
+    if (!type) return;
+    if (!island.buildingLevels) island.buildingLevels = {};
+    const key = `${row}_${col}`;
+    const level = island.buildingLevels[key] || 1;
+    const cost = getUpgradeCost(type, level);
+    if (!cost) {
+        showInfo('❌ Dit gebouw is al max level!');
+        return;
+    }
+    if (!canAfford(cost)) {
+        showInfo('❌ Niet genoeg resources voor upgrade!');
+        return;
+    }
+    for (const [res, amount] of Object.entries(cost)) {
+        Game.state.resources[res] -= amount;
+    }
+    island.buildingLevels[key] = level + 1;
+    addKingdomXP(10);
+    
+    const building = BUILDINGS[type];
+    const pos = getIslandScreenPos(island);
+    const cellX = pos.x - (island.size * CELL_SIZE) / 2 + col * CELL_SIZE + CELL_SIZE / 2;
+    const cellY = pos.y - (island.size * CELL_SIZE) / 2 + row * CELL_SIZE + CELL_SIZE / 2;
+    spawnParticles(cellX, cellY, '#ffdd44', 12);
+    
+    showInfo(`⬆️ ${building.name} upgraded naar level ${level + 1}!`);
+    saveGame();
+    updateUI();
+}
+
+// ============================================
+// ACTIVE EFFECTS TICKER
+// ============================================
+function tickActiveEffects() {
+    if (!Game.state || !Game.state.activeEffects) return;
+    for (let i = Game.state.activeEffects.length - 1; i >= 0; i--) {
+        Game.state.activeEffects[i].ticksLeft--;
+        if (Game.state.activeEffects[i].ticksLeft <= 0) {
+            const eff = Game.state.activeEffects[i];
+            showEventModal(`${eff.name} Afgelopen`, 'Het effect is uitgewerkt.', [{ text: 'Effect verlopen', negative: false }]);
+            Game.state.activeEffects.splice(i, 1);
+        }
+    }
+}
+
+function getActiveEffectMultiplier(resource) {
+    if (!Game.state || !Game.state.activeEffects) return 1.0;
+    let mult = 1.0;
+    for (const eff of Game.state.activeEffects) {
+        if (eff.bonus === 'all') mult *= eff.mult;
+        if (eff.bonus === resource) mult *= eff.mult;
+        if (eff.bonus === 'build_res' && (resource === 'wood' || resource === 'stone')) mult *= eff.mult;
+    }
+    return mult;
+}
+
+// ============================================
+// STATISTICS PANEL
+// ============================================
+function openStatsPanel() {
+    if (!Game.state) return;
+    const s = Game.state.stats;
+    const lvl = KINGDOM_LEVELS[Math.min(Game.state.kingdomLevel - 1, KINGDOM_LEVELS.length - 1)];
+    const nextLvl = KINGDOM_LEVELS[Math.min(Game.state.kingdomLevel, KINGDOM_LEVELS.length - 1)];
+    const xpNeeded = Game.state.kingdomLevel >= 10 ? 'MAX' : `${Game.state.kingdomXP}/${nextLvl.xp}`;
+    
+    const achUnlocked = Game.state.achievements.length;
+    const achTotal = ACHIEVEMENTS.length;
+    
+    const questCount = Game.state.activeQuests.length;
+    const effectCount = Game.state.activeEffects.length;
+    
+    let html = `<div style="max-height:70vh;overflow-y:auto;padding:10px;">`;
+    html += `<h3 style="color:#ffcc44;margin:0 0 8px 0">👑 ${lvl.title} (Lv.${Game.state.kingdomLevel})</h3>`;
+    html += `<p style="font-size:0.8rem;color:#aab">XP: ${xpNeeded} ${lvl.bonus ? '• ' + lvl.bonus : ''}</p>`;
+    html += `<p style="font-size:0.8rem;color:#aab">😊 Geluk: ${Game.state.happiness}% • ${SEASON_NAMES[Game.state.season]} • ${isDaytime() ? '☀️ Dag' : '🌙 Nacht'}</p>`;
+    html += `<p style="font-size:0.8rem;color:#aab">${getWeatherDesc(Game.state.weather)}</p>`;
+    html += `<hr style="border-color:rgba(255,255,255,0.1);margin:6px 0">`;
+    html += `<p><strong>📊 Statistieken</strong></p>`;
+    html += `<p style="font-size:0.75rem;color:#99a">⚔️ Gevechten gewonnen: ${s.totalBattlesWon} | Verloren: ${s.totalBattlesLost}</p>`;
+    html += `<p style="font-size:0.75rem;color:#99a">🏗️ Gebouwen geplaatst: ${s.totalBuildingsPlaced}</p>`;
+    html += `<p style="font-size:0.75rem;color:#99a">🤝 Trades voltooid: ${s.totalTradesCompleted}</p>`;
+    html += `<p style="font-size:0.75rem;color:#99a">🏝️ Eilanden gekocht: ${s.totalIslandsBought}</p>`;
+    html += `<p style="font-size:0.75rem;color:#99a">🎉 Festivals: ${s.totalFestivalsHeld} | 🗺️ Schatten: ${s.totalTreasuresFound}</p>`;
+    html += `<p style="font-size:0.75rem;color:#99a">🏴‍☠️ Piratenraids: ${s.totalPirateRaids}</p>`;
+    html += `<hr style="border-color:rgba(255,255,255,0.1);margin:6px 0">`;
+    html += `<p><strong>🏆 Achievements (${achUnlocked}/${achTotal})</strong></p>`;
+    for (const ach of ACHIEVEMENTS) {
+        const unlocked = Game.state.achievements.includes(ach.id);
+        html += `<p style="font-size:0.75rem;color:${unlocked ? '#88ff88' : '#556'}">${unlocked ? '✅' : '🔒'} ${ach.name} - ${ach.desc}</p>`;
+    }
+    html += `<hr style="border-color:rgba(255,255,255,0.1);margin:6px 0">`;
+    html += `<p><strong>📜 Actieve Quests (${questCount})</strong></p>`;
+    for (const q of Game.state.activeQuests) {
+        const pct = Math.min(100, Math.floor(q.progress / q.target * 100));
+        html += `<p style="font-size:0.75rem;color:#aaddff">${q.desc} — ${pct}% (${q.ticksLeft} ticks)</p>`;
+    }
+    if (questCount === 0) html += `<p style="font-size:0.75rem;color:#556">Geen actieve quests</p>`;
+    html += `<hr style="border-color:rgba(255,255,255,0.1);margin:6px 0">`;
+    html += `<p><strong>📜 Koninklijke Decreten</strong></p>`;
+    if (Game.state.activeEffects.some(e => e.type === 'decree')) {
+        const dec = Game.state.activeEffects.find(e => e.type === 'decree');
+        html += `<p style="font-size:0.75rem;color:#ffdd44">Actief: ${dec.name} (${dec.ticksLeft} ticks)</p>`;
+    } else {
+        for (let i = 0; i < DECREES.length; i++) {
+            const d = DECREES[i];
+            const affordable = Game.state.resources.gold >= d.cost;
+            html += `<button onclick="issueDecree(${i})" style="display:block;margin:3px 0;padding:3px 8px;font-size:0.7rem;background:${affordable ? 'rgba(80,130,220,0.5)' : 'rgba(50,50,50,0.5)'};border:1px solid rgba(100,150,255,0.3);color:${affordable ? '#fff' : '#556'};border-radius:4px;cursor:${affordable ? 'pointer' : 'default'};width:100%">${d.name} (${d.cost}💰) - ${d.desc}</button>`;
+        }
+    }
+    html += `</div>`;
+    
+    document.getElementById('info-content').innerHTML = html;
+}
+
 function drawTrader(ctx) {
     if (!Game.trader) return;
     const pos = getTraderScreenPos();
@@ -3142,7 +3958,24 @@ function showBuildingInfoWithMove(type, cellResult) {
         html += `<p style="color:#aaddff">Inkomen/10s: ${incomeText}</p>`;
     }
     
-    html += `<button id="move-building-btn" style="margin-top:6px;padding:4px 12px;background:rgba(80,130,220,0.6);border:1px solid rgba(100,150,255,0.4);color:#fff;border-radius:6px;cursor:pointer;font-size:0.8rem;">📦 Verplaats</button>`;
+    // Building level display
+    const level = getBuildingLevel(cellResult.island, cellResult.row, cellResult.col);
+    if (level > 1) {
+        html += `<p style="color:#ffdd44;font-size:0.8rem">⭐ Level ${level} (${level === 2 ? '+50%' : '+100%'} inkomen)</p>`;
+    }
+    
+    html += `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">`;
+    html += `<button id="move-building-btn" style="padding:4px 12px;background:rgba(80,130,220,0.6);border:1px solid rgba(100,150,255,0.4);color:#fff;border-radius:6px;cursor:pointer;font-size:0.8rem;">📦 Verplaats</button>`;
+    
+    // Upgrade button
+    const upgradeCost = getUpgradeCost(type, level);
+    if (upgradeCost) {
+        const icons = { gold: '💰', wood: '🪵', stone: '🪨', scales: '🐲', wool: '🧶', food: '🌾', leather: '👜', iron: '⚙️' };
+        const costText = Object.entries(upgradeCost).map(([r,a]) => `${icons[r]||''}${a}`).join(' ');
+        const canUpgrade = canAfford(upgradeCost);
+        html += `<button id="upgrade-building-btn" style="padding:4px 12px;background:${canUpgrade ? 'rgba(220,180,50,0.6)' : 'rgba(50,50,50,0.5)'};border:1px solid rgba(220,180,50,0.4);color:${canUpgrade ? '#fff' : '#556'};border-radius:6px;cursor:${canUpgrade ? 'pointer' : 'default'};font-size:0.8rem;">⬆️ Lv.${level+1} (${costText})</button>`;
+    }
+    html += `</div>`;
     
     document.getElementById('info-content').innerHTML = html;
     
@@ -3152,6 +3985,15 @@ function showBuildingInfoWithMove(type, cellResult) {
         document.querySelectorAll('.building-card').forEach(c => c.classList.remove('selected'));
         showInfo('📦 Klik op een lege plek om het gebouw te verplaatsen. Klik ergens anders om te annuleren.');
     });
+    
+    const upgradeBtn = document.getElementById('upgrade-building-btn');
+    if (upgradeBtn && upgradeCost && canAfford(upgradeCost)) {
+        upgradeBtn.addEventListener('click', () => {
+            upgradeBuilding(cellResult.island, cellResult.row, cellResult.col);
+            // Refresh the info panel
+            showBuildingInfoWithMove(type, cellResult);
+        });
+    }
 }
 
 // ============================================
@@ -3169,6 +4011,7 @@ function gameLoop(timestamp) {
     if (Game.state) {
         tickIncome(dt);
         tickAlchemistConversions(dt);
+        tickDayNight(dt);
     }
     
     updateParticles();
@@ -3184,11 +4027,16 @@ function render() {
     const w = Game.canvas.width;
     const h = Game.canvas.height;
     
-    // Clear
-    ctx.fillStyle = '#0a0a1a';
+    // Clear - day/night tint
+    const dayProgress = Game.state ? Game.state.dayTime / DAY_CYCLE_LENGTH : 0;
+    const nightAmount = Math.abs(dayProgress - 0.25) < 0.25 ? 0 : Math.min(1, (Math.abs(dayProgress - 0.75) < 0.25 ? 0 : 1) * 0.6);
+    const bgR = Math.floor(10 + (isDaytime() ? 8 : 0));
+    const bgG = Math.floor(10 + (isDaytime() ? 5 : 0));
+    const bgB = Math.floor(26 + (isDaytime() ? 12 : 0));
+    ctx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
     ctx.fillRect(0, 0, w, h);
     
-    // Stars background
+    // Stars background (dimmer during day)
     drawStars(ctx, w, h);
     
     // Draw wind particles
@@ -3217,8 +4065,50 @@ function render() {
     // Draw dragon animation
     drawDragon(ctx);
     
+    // Day/night overlay
+    if (Game.state && !isDaytime()) {
+        ctx.fillStyle = 'rgba(0, 0, 30, 0.15)';
+        ctx.fillRect(0, 0, w, h);
+    }
+    
+    // Weather overlay
+    if (Game.state) drawWeatherOverlay(ctx, w, h);
+    
     // Draw income timer and preview
     drawHUD(ctx, w, h);
+}
+
+function drawWeatherOverlay(ctx, w, h) {
+    if (!Game.state) return;
+    const weather = Game.state.weather;
+    if (weather === 'rain') {
+        ctx.fillStyle = 'rgba(50, 80, 120, 0.08)';
+        ctx.fillRect(0, 0, w, h);
+        // Rain drops
+        ctx.strokeStyle = 'rgba(120, 160, 220, 0.3)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 40; i++) {
+            const x = ((Game.floatOffset * 200 + i * 37) % w);
+            const y = ((Game.floatOffset * 300 + i * 53) % h);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x - 2, y + 8);
+            ctx.stroke();
+        }
+    } else if (weather === 'fog') {
+        ctx.fillStyle = 'rgba(150, 160, 170, 0.1)';
+        ctx.fillRect(0, 0, w, h);
+    } else if (weather === 'storm') {
+        ctx.fillStyle = 'rgba(20, 20, 40, 0.12)';
+        ctx.fillRect(0, 0, w, h);
+        if (Math.random() < 0.003) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(0, 0, w, h);
+        }
+    } else if (weather === 'sun') {
+        ctx.fillStyle = 'rgba(255, 200, 50, 0.03)';
+        ctx.fillRect(0, 0, w, h);
+    }
 }
 
 function drawStars(ctx, w, h) {
