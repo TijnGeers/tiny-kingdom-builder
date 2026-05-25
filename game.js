@@ -25,6 +25,8 @@ const Game = {
     trader: null,
     traderTimer: 0,
     placingIsland: false,
+    muteNotifications: false,
+    noChallenges: false,
 };
 
 // ============================================
@@ -427,6 +429,7 @@ function tickBots() {
 }
 
 function tryBotChallenge() {
+    if (Game.noChallenges) return;
     if (!Game.state.bots) return;
     // Random chance a bot challenges the player
     for (const bot of Game.state.bots) {
@@ -779,6 +782,33 @@ function renderMenuPanel() {
     list.querySelectorAll('.btn-delete').forEach(btn => {
         btn.addEventListener('click', () => deleteSlot(parseInt(btn.dataset.slot)));
     });
+    
+    // Settings toggles
+    const settingsDiv = document.getElementById('menu-settings');
+    if (settingsDiv) {
+        settingsDiv.innerHTML = `
+            <div class="menu-toggle">
+                <label>
+                    <input type="checkbox" id="toggle-mute" ${Game.muteNotifications ? 'checked' : ''}>
+                    🔕 Meldingen uit
+                </label>
+            </div>
+            <div class="menu-toggle">
+                <label>
+                    <input type="checkbox" id="toggle-no-challenge" ${Game.noChallenges ? 'checked' : ''}>
+                    🛡️ Uitdagingen blokkeren
+                </label>
+            </div>
+        `;
+        document.getElementById('toggle-mute').addEventListener('change', (e) => {
+            Game.muteNotifications = e.target.checked;
+            localStorage.setItem('tkb-mute-notifications', Game.muteNotifications);
+        });
+        document.getElementById('toggle-no-challenge').addEventListener('change', (e) => {
+            Game.noChallenges = e.target.checked;
+            localStorage.setItem('tkb-no-challenges', Game.noChallenges);
+        });
+    }
 }
 
 // ============================================
@@ -787,6 +817,10 @@ function renderMenuPanel() {
 function init() {
     Game.canvas = document.getElementById('game-canvas');
     Game.ctx = Game.canvas.getContext('2d');
+    
+    // Load settings from localStorage
+    Game.muteNotifications = localStorage.getItem('tkb-mute-notifications') === 'true';
+    Game.noChallenges = localStorage.getItem('tkb-no-challenges') === 'true';
     
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -2772,6 +2806,7 @@ function drawTrader(ctx) {
 // UI
 // ============================================
 function showEventModal(title, text, effects) {
+    if (Game.muteNotifications) return;
     const container = document.getElementById('toast-container');
     
     const toast = document.createElement('div');
