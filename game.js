@@ -27,6 +27,9 @@ const Game = {
     placingIsland: false,
     muteNotifications: false,
     noChallenges: false,
+    musicEnabled: true,
+    musicTracks: [],
+    currentTrack: 0,
 };
 
 // ============================================
@@ -799,6 +802,12 @@ function renderMenuPanel() {
                     🛡️ Uitdagingen blokkeren
                 </label>
             </div>
+            <div class="menu-toggle">
+                <label>
+                    <input type="checkbox" id="toggle-music" ${Game.musicEnabled ? 'checked' : ''}>
+                    🎵 Muziek aan
+                </label>
+            </div>
         `;
         document.getElementById('toggle-mute').addEventListener('change', (e) => {
             Game.muteNotifications = e.target.checked;
@@ -808,6 +817,62 @@ function renderMenuPanel() {
             Game.noChallenges = e.target.checked;
             localStorage.setItem('tkb-no-challenges', Game.noChallenges);
         });
+        document.getElementById('toggle-music').addEventListener('change', (e) => {
+            Game.musicEnabled = e.target.checked;
+            localStorage.setItem('tkb-music-enabled', Game.musicEnabled);
+            if (Game.musicEnabled) {
+                playCurrentTrack();
+            } else {
+                stopMusic();
+            }
+        });
+    }
+}
+
+// ============================================
+// MUSIC SYSTEM
+// ============================================
+function initMusic() {
+    Game.musicTracks = [
+        new Audio('music1.mpeg'),
+        new Audio('music2.mpeg'),
+    ];
+    Game.currentTrack = 0;
+    
+    for (let i = 0; i < Game.musicTracks.length; i++) {
+        Game.musicTracks[i].volume = 0.3;
+        Game.musicTracks[i].addEventListener('ended', () => {
+            Game.currentTrack = (Game.currentTrack + 1) % Game.musicTracks.length;
+            playCurrentTrack();
+        });
+    }
+    
+    // Music needs user interaction to start (browser autoplay policy)
+    const startMusic = () => {
+        if (Game.musicEnabled) {
+            playCurrentTrack();
+        }
+        document.removeEventListener('click', startMusic);
+        document.removeEventListener('touchstart', startMusic);
+    };
+    document.addEventListener('click', startMusic);
+    document.addEventListener('touchstart', startMusic);
+}
+
+function playCurrentTrack() {
+    if (!Game.musicEnabled || !Game.musicTracks.length) return;
+    // Stop all tracks first
+    for (const track of Game.musicTracks) {
+        track.pause();
+    }
+    const track = Game.musicTracks[Game.currentTrack];
+    track.currentTime = 0;
+    track.play().catch(() => {});
+}
+
+function stopMusic() {
+    for (const track of Game.musicTracks) {
+        track.pause();
     }
 }
 
@@ -821,6 +886,10 @@ function init() {
     // Load settings from localStorage
     Game.muteNotifications = localStorage.getItem('tkb-mute-notifications') === 'true';
     Game.noChallenges = localStorage.getItem('tkb-no-challenges') === 'true';
+    Game.musicEnabled = localStorage.getItem('tkb-music-enabled') !== 'false';
+    
+    // Setup background music
+    initMusic();
     
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
