@@ -30,6 +30,7 @@ const Game = {
     musicEnabled: true,
     musicTracks: [],
     currentTrack: 0,
+    movingBuilding: null,
 };
 
 // ============================================
@@ -1113,6 +1114,66 @@ function handleClick(e) {
         return;
     }
     
+    // Move building mode
+    if (Game.movingBuilding) {
+        const result = getCellAt(worldPos.x, worldPos.y);
+        if (result && result.island.grid[result.row][result.col] === null) {
+            // Move building to new cell
+            const src = Game.movingBuilding;
+            const buildingType = src.island.grid[src.row][src.col];
+            src.island.grid[src.row][src.col] = null;
+            result.island.grid[result.row][result.col] = buildingType;
+            
+            // Update specials on source island
+            const building = BUILDINGS[buildingType];
+            if (building.special === 'dragon_protection') {
+                src.island.hasTower = false;
+                for (let r = 0; r < src.island.size; r++)
+                    for (let c = 0; c < src.island.size; c++)
+                        if (src.island.grid[r][c] === 'tower') src.island.hasTower = true;
+            }
+            if (building.special === 'wind_protection') {
+                src.island.hasTemple = false;
+                for (let r = 0; r < src.island.size; r++)
+                    for (let c = 0; c < src.island.size; c++)
+                        if (src.island.grid[r][c] === 'temple') src.island.hasTemple = true;
+            }
+            
+            // Update specials on destination island
+            if (building.special === 'dragon_protection') result.island.hasTower = true;
+            if (building.special === 'wind_protection') result.island.hasTemple = true;
+            
+            // Update pet dragon location if applicable
+            if ((buildingType === 'dragon_stable' || buildingType === 'drakennest') && Game.state.petDragons) {
+                for (const pet of Game.state.petDragons) {
+                    if (pet.islandId === src.island.id && pet.row === src.row && pet.col === src.col) {
+                        pet.islandId = result.island.id;
+                        pet.row = result.row;
+                        pet.col = result.col;
+                    }
+                }
+            }
+            
+            // Particles at destination
+            const pos = getIslandScreenPos(result.island);
+            const cellX = pos.x - (result.island.size * CELL_SIZE) / 2 + result.col * CELL_SIZE + CELL_SIZE / 2;
+            const cellY = pos.y - (result.island.size * CELL_SIZE) / 2 + result.row * CELL_SIZE + CELL_SIZE / 2;
+            spawnParticles(cellX, cellY, '#88aaff', 8);
+            
+            showInfo(`📦 ${building.name} verplaatst!`);
+            Game.movingBuilding = null;
+            saveGame();
+            updateUI();
+        } else if (result && result.island.grid[result.row][result.col] !== null) {
+            showInfo('❌ Deze plek is al bezet!');
+        } else {
+            // Clicked outside grid - cancel move
+            Game.movingBuilding = null;
+            showInfo('📦 Verplaatsen geannuleerd.');
+        }
+        return;
+    }
+    
     if (Game.bridgeMode) {
         const island = getIslandAt(worldPos.x, worldPos.y);
         if (island) {
@@ -1166,7 +1227,7 @@ function handleClick(e) {
                 openAlchemistLab(result.island, result.row, result.col);
                 return;
             }
-            showBuildingInfo(clickedType);
+            showBuildingInfoWithMove(clickedType, result);
         } else {
             const island = getIslandAt(worldPos.x, worldPos.y);
             if (island) {
@@ -3066,6 +3127,31 @@ function showBuildingInfo(type) {
     }
     
     document.getElementById('info-content').innerHTML = html;
+}
+
+function showBuildingInfoWithMove(type, cellResult) {
+    const b = BUILDINGS[type];
+    let html = `<p><strong>${b.icon} ${b.name}</strong></p>`;
+    html += `<p>${b.description}</p>`;
+    
+    if (b.income && Object.keys(b.income).length > 0) {
+        const incomeText = Object.entries(b.income).map(([r, a]) => {
+            const icons = { gold: '💰', wood: '🪵', stone: '🪨', food: '🌾' };
+            return `${icons[r]}${a > 0 ? '+' : ''}${a}`;
+        }).join(' ');
+        html += `<p style="color:#aaddff">Inkomen/10s: ${incomeText}</p>`;
+    }
+    
+    html += `<button id="move-building-btn" style="margin-top:6px;padding:4px 12px;background:rgba(80,130,220,0.6);border:1px solid rgba(100,150,255,0.4);color:#fff;border-radius:6px;cursor:pointer;font-size:0.8rem;">📦 Verplaats</button>`;
+    
+    document.getElementById('info-content').innerHTML = html;
+    
+    document.getElementById('move-building-btn').addEventListener('click', () => {
+        Game.movingBuilding = { island: cellResult.island, row: cellResult.row, col: cellResult.col };
+        Game.selectedBuilding = null;
+        document.querySelectorAll('.building-card').forEach(c => c.classList.remove('selected'));
+        showInfo('📦 Klik op een lege plek om het gebouw te verplaatsen. Klik ergens anders om te annuleren.');
+    });
 }
 
 // ============================================
