@@ -863,6 +863,8 @@ body {
 /* Bot Invite Modal */
 .bot-invite {
     max-width: 420px;
+    max-height: 85vh;
+    overflow-y: auto;
 }
 
 #bot-invite-stats {
@@ -919,6 +921,8 @@ body {
 /* Battle Result Modal */
 .battle-result {
     max-width: 420px;
+    max-height: 85vh;
+    overflow-y: auto;
 }
 
 #battle-stats {
